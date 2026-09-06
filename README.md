@@ -15,7 +15,7 @@ monitor shows only the video while the phone keeps the UI and controls. The serv
 server experiment flag `fullscreenHdmiHamplayer` (experiment id 45372440), which is off unless the
 account is in the experiment.
 
-`YTFullHDMI.dylib` does two things:
+`YTFullHDMI.dylib` does four things:
 
 - forces the flag getter to return `YES`
   (`-[YTHotConfigIosClientGlobalConfigImpl fullscreenHdmiHamplayer]` on YouTube 21.x,
@@ -24,17 +24,20 @@ account is in the experiment.
   `MLHAMQueuePlayer maybeSwitchToAVPlayer` reloads playback onto the AVPlayer/HLS path, which has no
   stream for most videos and fails with "No stream"; keeping the HAM player avoids that;
 - calls `-[YTHDMIServiceImpl enableHDMIPlayback:]` as soon as a display is connected during playback.
-  Stock code only records the screen on connect and starts mirroring on the next video activation.
+  Stock code only records the screen on connect and starts mirroring on the next video activation;
+- hides and releases the external `UIWindow` after `-[YTHDMIServiceImpl stopMirroring]`. Stock code
+  leaves it visible, so iOS never resumes system mirroring after leaving the video until the app is
+  killed.
 
 It logs with the `[YTFullHDMI]` prefix (Console.app, filter by process `YouTube`).
 
 The dylib uses plain ObjC runtime swizzling, no Substrate / Theos.
 
-Verified in the iOS Simulator (Xcode 26.6, iOS 26.5) with YouTube 21.35.3 and a simulated
-1920×1080 external display: video renders fullscreen in the external window, returns to the phone on
-disconnect, and moves immediately when the display is connected mid-playback. YouTube 20.10.4 hangs at
-the splash screen in the simulator, so it is untested there; the hooked methods exist and the
-`YTHDMIServiceImpl` code is identical.
+Verified on an iPhone 16 Pro with XREAL glasses over USB-C on YouTube 20.10.4 (YouTube Plus 5.2b4
+build), including 2160p playback and mirroring coming back after leaving the video. Also verified in
+the iOS Simulator (Xcode 26.6, iOS 26.5) with YouTube 21.35.3 and a simulated 1920×1080 external
+display. Sideloaded 21.x builds may stop playback after about a minute with HTTP 400 from the CDN;
+that is the known sideload/attestation problem of recent YouTube versions, not this tweak.
 
 ## Build and inject
 

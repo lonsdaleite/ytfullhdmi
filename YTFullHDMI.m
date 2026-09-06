@@ -32,7 +32,20 @@ static BOOL flag_yes(id self, SEL _cmd) { return YES; }
 // (maybeSwitchToAVPlayer), which has no stream for most videos ("No stream"). Keep the HAM player.
 static BOOL route_no_hdmi(id self, SEL _cmd) { return NO; }
 
-static IMP orig_enable, orig_setViewToMirror;
+static IMP orig_enable, orig_setViewToMirror, orig_stop;
+// Stock stopMirroring detaches the rendering view but leaves the external UIWindow alive and visible,
+// so iOS never resumes system mirroring until the app is killed. Hide and drop the window; the next
+// setViewToMirror: creates a fresh one.
+static void my_stop(id self, SEL _cmd) {
+    ((void (*)(id, SEL))orig_stop)(self, _cmd);
+    UIWindow *w = [self valueForKey:@"secondWindow"];
+    if (w) {
+        w.hidden = YES;
+        w.rootViewController = nil;
+        [self setValue:nil forKey:@"secondWindow"];
+        YLOG(@"stopMirroring: external window hidden and released");
+    }
+}
 static void my_enable(id self, SEL _cmd, id pc) {
     YLOG(@"enableHDMIPlayback: %@ screens=%lu", pc, (unsigned long)[UIScreen screens].count);
     ((void (*)(id, SEL, id))orig_enable)(self, _cmd, pc);
@@ -81,6 +94,7 @@ __attribute__((constructor)) static void YTFullHDMI_init(void) {
     swizzle("MLAudioSession", "outputRouteUsesHDMI", (IMP)route_no_hdmi);
     orig_enable = swizzle("YTHDMIServiceImpl", "enableHDMIPlayback:", (IMP)my_enable);
     orig_setViewToMirror = swizzle("YTHDMIServiceImpl", "setViewToMirror:playbackController:", (IMP)my_setViewToMirror);
+    orig_stop = swizzle("YTHDMIServiceImpl", "stopMirroring", (IMP)my_stop);
     // YouTube >= 21.x
     swizzle("YTHotConfigIosClientGlobalConfigImpl", "fullscreenHdmiHamplayer", (IMP)flag_yes);
     // YouTube 20.x
