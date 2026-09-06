@@ -1,0 +1,7 @@
+out/
+*.ipa
+*.dylib
+*.dis
+classdump_*.txt
+strings_*.txt
+*.logarchive/
